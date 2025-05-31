@@ -198,12 +198,12 @@ async def test_pwm_freq(dut):
     while dut.uo_out.value == 0: # keep going until next rise
         await ClockCycles(dut.clk, 1)
 
-    period = (cocotb.utils.get_sim_time(units="ns") - timestart) * (1 ** 9) # unit conversion
+    period = (cocotb.utils.get_sim_time(units="ns") - timestart) * (1e-9) # unit conversion
     frequency = 1/period
 
     dut._log.info(f'Frequency: {frequency}')
 
-    assert frequency >= 2970 and frequency <= 3030, "frequency is out of bounds" # fails if frequency outside of 2970-3030
+    assert frequency >= 2970 and frequency <= 3030, "frequency is out of bounds"
 
     dut._log.info("PWM Frequency test completed successfully")
 

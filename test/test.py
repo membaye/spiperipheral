@@ -153,7 +153,7 @@ async def test_spi(dut):
 async def test_pwm_freq(dut):
     # need to measure freq of PWM signal produced on uo_out after sending spi control commands
 
-    dut._log.info("Start PWM Frequency test")
+    dut._log.info("Start PWM frequency test")
 
     # Set the clock period to 100 ns (10 MHz)
     clock = Clock(dut.clk, 100, units="ns")
@@ -177,17 +177,75 @@ async def test_pwm_freq(dut):
 
     await ClockCycles(dut.clk, 5)
 
-    start = cocotb.utils.get_sim_time(units="ns") # time start sampled at rise
-    timeout = 1e6
+    begin = cocotb.utils.get_sim_time(units="ns") # time start sampled at rise
+    to = 1e6
     
     while dut.uo_out.value != 0: # keep going until next fall
         await ClockCycles(dut.clk, 1)
-        if (cocotb.utils.get_sim_time(units="ns") - start > timeout):
+        if (cocotb.utils.get_sim_time(units="ns") - begin > to):
             return -1
 
     while dut.uo_out.value == 0: # keep going until next rise
         await ClockCycles(dut.clk, 1)
-        if (cocotb.utils.get_sim_time(units="ns") - start > timeout):
+        if (cocotb.utils.get_sim_time(units="ns") - begin > to):
+            return -1
+        
+    timestart = cocotb.utils.get_sim_time(units="ns")
+
+    while dut.uo_out.value != 0: # keep going until next fall
+        await ClockCycles(dut.clk, 1)
+
+    while dut.uo_out.value == 0: # keep going until next rise
+        await ClockCycles(dut.clk, 1)
+ 
+    frequency = 1/((cocotb.utils.get_sim_time(units="ns") - timestart) * (1e-9)) # unit conversion
+
+    dut._log.info(f'Frequency: {frequency}')
+
+    assert frequency >= 2970 and frequency <= 3030, "Frequency is out of bounds!"
+
+    dut._log.info("PWM Frequency test completed successfully")
+
+
+@cocotb.test()
+async def test_pwm_duty(dut):
+    # trying
+    dut._log.info("Start PWM duty cycle test")
+
+    # Set the clock period to 100 ns (10 MHz)
+    clock = Clock(dut.clk, 100, units="ns")
+    cocotb.start_soon(clock.start())
+
+    # Reset
+    dut._log.info("Reset")
+    dut.ena.value = 1
+    ncs = 1
+    bit = 0
+    sclk = 0
+    dut.ui_in.value = ui_in_logicarray(ncs, bit, sclk)
+    dut.rst_n.value = 0
+    await ClockCycles(dut.clk, 5)
+    dut.rst_n.value = 1
+    await ClockCycles(dut.clk, 5)
+
+    await send_spi_transaction(dut, 1, 0x04, 0x80) # set duty cycle to 50%
+    await send_spi_transaction(dut, 1, 0x00, 0x01) # enable output
+    await send_spi_transaction(dut, 1, 0x02, 0x01) # enabl pwm
+
+    await ClockCycles(dut.clk, 5)
+
+    # same as freq test, need to find period
+    begin = cocotb.utils.get_sim_time(units="ns") # time start sampled at rise
+    to = 1e6
+    
+    while dut.uo_out.value != 0: # keep going until next fall
+        await ClockCycles(dut.clk, 1)
+        if (cocotb.utils.get_sim_time(units="ns") - begin > to):
+            return -1
+
+    while dut.uo_out.value == 0: # keep going until next rise
+        await ClockCycles(dut.clk, 1)
+        if (cocotb.utils.get_sim_time(units="ns") - begin > to):
             return -1
         
     timestart = cocotb.utils.get_sim_time(units="ns")
@@ -198,17 +256,59 @@ async def test_pwm_freq(dut):
     while dut.uo_out.value == 0: # keep going until next rise
         await ClockCycles(dut.clk, 1)
 
-    period = (cocotb.utils.get_sim_time(units="ns") - timestart) * (1e-9) # unit conversion
-    frequency = 1/period
+    period = cocotb.utils.get_sim_time(units="ns") - timestart
 
-    dut._log.info(f'Frequency: {frequency}')
+    # 50% test
+    begin = cocotb.utils.get_sim_time(units="ns") # time start sampled at rise
+    to = 1e6
 
-    assert frequency >= 2970 and frequency <= 3030, "frequency is out of bounds"
+    while dut.uo_out.value != 0: # keep going until next fall
+        await ClockCycles(dut.clk, 1)
+        if (cocotb.utils.get_sim_time(units="ns") - begin > to):
+            return -1
 
-    dut._log.info("PWM Frequency test completed successfully")
+    while dut.uo_out.value == 0: # keep going until next rise
+        await ClockCycles(dut.clk, 1)
+        if (cocotb.utils.get_sim_time(units="ns") - begin > to):
+            return -1
 
+    timestart = cocotb.utils.get_sim_time(units="ns")
 
-@cocotb.test()
-async def test_pwm_duty(dut):
-    # Write your test here
+    while dut.uo_out.value != 0: # keep going until next fall
+        await ClockCycles(dut.clk, 1)
+
+    highperiod = cocotb.utils.get_sim_time(units="ns") - timestart # need to know high time
+
+    dutycycle = (highperiod/period) * (100)
+
+    dut._log.info(f'At expected 50% duty cycle, recorded value is: {dutycycle}%')
+    assert dutycycle == 50, "Duty cycle is expected to be 50%!"
+
+    # 0% test
+    await send_spi_transaction(dut, 1, 0x04, 0x00) # set duty cycle to 0%
+    begin = cocotb.utils.get_sim_time(units="ns")
+    to = 1e4
+
+    while dut.uo_out.value == 0: # ensuring there are no rising edges on 0%
+        await ClockCycles(dut.clk, 1)
+        if (dut.uo_out.value != 0):
+            assert dut.uo_out.value == 0, "At 0% duty cycle, signal should never go high!"
+        if (cocotb.utils.get_sim_time(units="ns") - begin > to):
+            break
+
+    dut._log.info("Duty Cycle 0%: PASS")
+
+    # 100% test
+    await send_spi_transaction(dut, 1, 0x04, 0xFF) # set duty cycle to 100%
+    begin = cocotb.utils.get_sim_time(units="ns")
+    to = 1e4
+
+    while dut.uo_out.value != 0: # ensuring there are rising edges on 100%
+        await ClockCycles(dut.clk, 1)
+        if (dut.uo_out.value == 0):
+            assert dut.uo_out.value != 0, "At 100% duty cycle, signal should never go low!"
+        if (cocotb.utils.get_sim_time(units="ns") - begin > to):
+            break
+    dut._log.info("Duty Cycle 100%: PASS")
+
     dut._log.info("PWM Duty Cycle test completed successfully")

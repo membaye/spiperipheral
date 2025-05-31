@@ -209,7 +209,10 @@ async def test_pwm_freq(dut):
 
 @cocotb.test()
 async def test_pwm_duty(dut):
-    # trying
+    # identical to freq test, need to first find period [(cocotb.utils.get_sim_time(units="ns") - timestart) * (1e-9)]
+    # then, we test pwm duty cycle at 0%, 50%, and 100% by ensuring when configured to 50%, it actually is;
+    # and for 0% and 100%, we check for no rising edges and no falling edges respectively.
+    
     dut._log.info("Start PWM duty cycle test")
 
     # Set the clock period to 100 ns (10 MHz)
@@ -234,7 +237,6 @@ async def test_pwm_duty(dut):
 
     await ClockCycles(dut.clk, 5)
 
-    # same as freq test, need to find period
     begin = cocotb.utils.get_sim_time(units="ns") # time start sampled at rise
     to = 1e6
     
@@ -303,7 +305,7 @@ async def test_pwm_duty(dut):
     begin = cocotb.utils.get_sim_time(units="ns")
     to = 1e4
 
-    while dut.uo_out.value != 0: # ensuring there are rising edges on 100%
+    while dut.uo_out.value != 0: # ensuring there no falling edges on 100%
         await ClockCycles(dut.clk, 1)
         if (dut.uo_out.value == 0):
             assert dut.uo_out.value != 0, "At 100% duty cycle, signal should never go low!"

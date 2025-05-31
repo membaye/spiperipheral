@@ -185,18 +185,20 @@ async def test_pwm_freq(dut):
         if (cocotb.utils.get_sim_time(units="ns") - start > timeout):
             return -1
 
-    while not dut.uo_out.value: # keep going until next rise
+    while dut.uo_out.value == 0: # keep going until next rise
         await ClockCycles(dut.clk, 1)
         if (cocotb.utils.get_sim_time(units="ns") - start > timeout):
             return -1
+        
+    timestart = cocotb.utils.get_sim_time(units="ns")
 
     while dut.uo_out.value != 0: # keep going until next fall
         await ClockCycles(dut.clk, 1)
 
-    while not dut.uo_out.value: # keep going until next rise
+    while dut.uo_out.value == 0: # keep going until next rise
         await ClockCycles(dut.clk, 1)
 
-    period = (cocotb.utils.get_sim_time(units="ns") - cocotb.utils.get_sim_time(units="ns")) * 1e-9 # unit conversion
+    period = (cocotb.utils.get_sim_time(units="ns") - timestart) * (1 ** 9) # unit conversion
     frequency = 1/period
 
     dut._log.info(f'Frequency: {frequency}')

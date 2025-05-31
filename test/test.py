@@ -212,7 +212,7 @@ async def test_pwm_duty(dut):
     # identical to freq test, need to first find period [(cocotb.utils.get_sim_time(units="ns") - timestart) * (1e-9)]
     # then, we test pwm duty cycle at 0%, 50%, and 100% by ensuring when configured to 50%, it actually is;
     # and for 0% and 100%, we check for no rising edges and no falling edges respectively.
-    
+
     dut._log.info("Start PWM duty cycle test")
 
     # Set the clock period to 100 ns (10 MHz)
